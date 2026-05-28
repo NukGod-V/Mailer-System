@@ -84,12 +84,13 @@ jobs:
           echo "========== DOCKER PS STATUS =========="
           docker ps -a
 
-      # 6. Seed the Ephemeral CI/CD Database
+      # 6. Seed the Ephemeral CI/CD Database INSIDE the Docker Network
       - name: Inject Database Seed Data
-        env:
-          CI_SMTP_EMAIL: ${{ secrets.CI_SMTP_EMAIL }}
-          CI_SMTP_PASSWORD: ${{ secrets.CI_SMTP_PASSWORD }}
-        run: python scripts/seed_ci_db.py
+        run: |
+          docker compose exec -T \
+            -e CI_SMTP_EMAIL="${{ secrets.CI_SMTP_EMAIL }}" \
+            -e CI_SMTP_PASSWORD="${{ secrets.CI_SMTP_PASSWORD }}" \
+            app python scripts/seed_ci_db.py
 
       # 7. Execute the Programmatic End-to-End Test
       - name: Run E2E Test Suite
