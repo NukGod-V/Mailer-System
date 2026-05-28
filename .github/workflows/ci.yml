@@ -3,9 +3,9 @@ name: Enterprise Mailer CI/CD
 # Trigger this workflow on every push or pull request to the main branch
 on:
   push:
-    branches: [ main ]
+    branches: [ main, v2.0 ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, v2.0 ]
 
 jobs:
   e2e-integration-test:
