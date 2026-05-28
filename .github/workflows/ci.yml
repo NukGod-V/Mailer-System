@@ -1,0 +1,55 @@
+name: Enterprise Mailer CI/CD
+
+# Trigger this workflow on every push or pull request to the main branch
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  e2e-integration-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Pull the code onto the GitHub Ubuntu VM
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Install Python
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip" # Speeds up future runs by caching dependencies
+
+      # 3. Install Python Dependencies
+      - name: Install Requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest requests dotenv
+
+      # 4. Spin up the Dockerized Infrastructure (Flask + MySQL)
+      - name: Start Docker Infrastructure
+        run: docker-compose up -d
+
+      # 5. Wait for the containers to initialize
+      - name: Wait for Backend Health
+        run: |
+          echo "Waiting for Flask and MySQL to become healthy..."
+          sleep 15 
+          curl -f http://localhost:5000/ || echo "Flask is booting..."
+
+      # 6. Seed the Ephemeral CI/CD Database
+      - name: Inject Database Seed Data
+        env:
+          CI_SMTP_EMAIL: ${{ secrets.CI_SMTP_EMAIL }}
+          CI_SMTP_PASSWORD: ${{ secrets.CI_SMTP_PASSWORD }}
+        run: python scripts/seed_ci_db.py
+
+      # 7. Execute the Programmatic End-to-End Test
+      - name: Run E2E Test Suite
+        env:
+          TESTMAIL_API_KEY: ${{ secrets.TESTMAIL_API_KEY }}
+          TESTMAIL_NAMESPACE: ${{ secrets.TESTMAIL_NAMESPACE }}
+        run: pytest tests/test_e2e_delivery.py -v -s

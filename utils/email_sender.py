@@ -101,14 +101,18 @@ def generate_tracking_pixel(tracking_id, base_url=None):
     return f'<img src="{tracking_url}" width="1" height="1" style="display:none;" alt=""/>'
 
 
-def send_email_smtp(from_email, from_token, to_email, subject, body, content_type="text/html", attachments=[]):
+def send_email_smtp(from_email, from_token, to_email, subject, body, content_type="text/html", attachments=[], skip_notification=False):
     from models import db
     from app import app
     
+    if subject:
+        subject = subject.replace('\xa0', ' ')
+    if body:
+        body = body.replace('\xa0', ' ')
     if not body:
         logger.error(f"Cannot send email to {to_email} — no body provided.")
         return False, to_email
-        
+    
     max_attempts = 3
     attempt = 0
     error_message = ""
@@ -126,7 +130,11 @@ def send_email_smtp(from_email, from_token, to_email, subject, body, content_typ
         try:
             with smtplib.SMTP('smtp.gmail.com', 587) as smtp:
                 smtp.starttls()
-                smtp.login(from_email, from_token)
+                
+                # [CRITICAL FIX] Strip all spaces and \xa0 from the Google App Password
+                clean_token = from_token.replace(' ', '').replace('\xa0', '').strip()
+                
+                smtp.login(from_email, clean_token)
 
                 msg = MIMEMultipart('alternative')
                 msg['Subject'] = subject
@@ -136,9 +144,9 @@ def send_email_smtp(from_email, from_token, to_email, subject, body, content_typ
 
                 # Create the email body part
                 if content_type.lower() == "text/html":
-                    msg.attach(MIMEText(email_body, 'html'))
+                    msg.attach(MIMEText(email_body, 'html', 'utf-8'))
                 else:
-                    msg.attach(MIMEText(email_body, 'plain'))
+                    msg.attach(MIMEText(email_body, 'plain', 'utf-8')) # THIS IS CRITICAL
 
                 # Handle attachments with better error handling
                 for path in attachments:
@@ -232,12 +240,13 @@ def send_email_smtp(from_email, from_token, to_email, subject, body, content_typ
         except Exception as log_err:
             logger.error(f"Error logging failure: {log_err}")
 
-    # Notify admin
-    try:
-        notify_admin_of_failure(to_email, subject, error_message)
-    except Exception as notify_err:
-        logger.error(f"Failed to notify admin: {notify_err}")
-        
+    # Notify admin (ONLY if this isn't already an admin notification)
+    if not skip_notification:
+        try:
+            notify_admin_of_failure(to_email, subject, error_message)
+        except Exception as notify_err:
+            logger.error(f"Failed to notify admin: {notify_err}")
+            
     return False, to_email
 
 
@@ -401,9 +410,9 @@ def notify_admin_of_failure(failed_email, original_subject, error_message):
     
     try:
         with app.app_context():
-            admin_email = db.session.execute(
-                "SELECT email FROM gmail_accounts WHERE is_admin = true LIMIT 1"
-            ).scalar()
+            # Use the ORM directly to fetch the admin email safely
+            admin_account = GmailAccount.query.filter_by(is_admin=True).first()
+            admin_email = admin_account.email if admin_account else None
             
             if not admin_email:
                 logger.error("No admin email found in gmail_accounts")
@@ -421,7 +430,8 @@ Please check the logs for more details.
 
             from_email, from_token = fetch_sender_credentials("admin")
             if from_email and from_token:
-                send_email_smtp(from_email, from_token, admin_email, subject, body, content_type="text/plain")
+                # Add skip_notification=True to prevent infinite loops!
+                send_email_smtp(from_email, from_token, admin_email, subject, body, content_type="text/plain", skip_notification=True)
                 logger.info(f"Admin notified about failure to send email to {failed_email}")
             else:
                 logger.error("Could not find admin credentials to send notification")
