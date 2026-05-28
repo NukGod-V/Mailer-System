@@ -27,6 +27,8 @@ jobs:
       - name: Create .env file and Setup
         run: |
           mkdir -p logs
+          touch logs/mailer.log
+          chmod 777 logs/mailer.log
           touch .env
           echo "FLASK_ENV=testing" >> .env
           echo "SECRET_KEY=veryTopSecrestKey" >> .env
