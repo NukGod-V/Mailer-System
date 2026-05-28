@@ -49,12 +49,30 @@ jobs:
       - name: Start Docker Infrastructure
         run: docker compose up -d
 
-      # 5. Wait for the containers to initialize
+      # 5. Wait for Backend Health (Robust Polling)
       - name: Wait for Backend Health
         run: |
-          echo "Waiting for Flask and MySQL to become healthy..."
-          sleep 15 
-          curl -f http://localhost:5000/ || echo "Flask is booting..."
+          echo "Polling Flask API..."
+          # Loop 10 times, pausing 3 seconds each time (30 seconds total)
+          for i in {1..10}; do
+            if curl -s -f http://localhost:5000/ > /dev/null; then
+              echo "✅ Flask is up and accepting traffic!"
+              exit 0
+            fi
+            echo "Waiting for Flask... ($i/10)"
+            sleep 3
+          done
+          echo "❌ Flask failed to boot. Proceeding to log dump."
+          exit 1 # This forces the pipeline to turn RED immediately
+
+      # 5.5. The Autopsy: Dump Logs if Health Check Fails
+      - name: Dump Docker Logs
+        if: failure() # This ensures this step ONLY runs if a previous step failed
+        run: |
+          echo "========== DOCKER COMPOSE LOGS =========="
+          docker compose logs
+          echo "========== DOCKER PS STATUS =========="
+          docker ps -a
 
       # 6. Seed the Ephemeral CI/CD Database
       - name: Inject Database Seed Data
