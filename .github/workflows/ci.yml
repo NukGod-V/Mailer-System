@@ -23,13 +23,14 @@ jobs:
           python-version: "3.12"
           cache: "pip" # Speeds up future runs by caching dependencies
       
-      # 3.5 Generate Ephemeral .env file for CI
-      - name: Create .env file
+      # 3.5 Generate Ephemeral .env file for CI and Setup Directories
+      - name: Create .env file and Setup
         run: |
+          mkdir -p logs
           touch .env
           echo "FLASK_ENV=testing" >> .env
           echo "SECRET_KEY=veryTopSecrestKey" >> .env
-          echo "DATABASE_URL=mysql+pymysql://root:rootpass@db:3306/mailer_db" >> .env
+          echo "DATABASE_URL=mysql+pymysql://root:rootpass@127.0.0.1:3306/mailer_db" >> .env
           echo "MYSQL_ROOT_PASSWORD=rootpass" >> .env
           echo "MYSQL_DATABASE=mailer_db" >> .env
           echo "SMTP_SERVER=smtp.gmail.com" >> .env
