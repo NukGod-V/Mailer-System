@@ -22,6 +22,19 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip" # Speeds up future runs by caching dependencies
+      
+      # 3.5 Generate Ephemeral .env file for CI
+      - name: Create .env file
+        run: |
+          touch .env
+          echo "FLASK_ENV=testing" >> .env
+          echo "SECRET_KEY=veryTopSecrestKey" >> .env
+          echo "DATABASE_URL=mysql+pymysql://root:rootpass@db:3306/mailer_db" >> .env
+          echo "MYSQL_ROOT_PASSWORD=rootpass" >> .env
+          echo "MYSQL_DATABASE=mailer_db" >> .env
+          echo "SMTP_SERVER=smtp.gmail.com" >> .env
+          echo "SMTP_PORT=587" >> .env
+          echo "TRACKING_BASE_URL=http://localhost:5000" >> .env
 
       # 3. Install Python Dependencies
       - name: Install Requirements
@@ -31,7 +44,7 @@ jobs:
 
       # 4. Spin up the Dockerized Infrastructure (Flask + MySQL)
       - name: Start Docker Infrastructure
-        run: docker-compose up -d
+        run: docker compose up -d
 
       # 5. Wait for the containers to initialize
       - name: Wait for Backend Health
