@@ -32,7 +32,7 @@ jobs:
           touch .env
           echo "FLASK_ENV=testing" >> .env
           echo "SECRET_KEY=veryTopSecrestKey" >> .env
-          echo "DATABASE_URL=mysql+pymysql://root:rootpass@127.0.0.1:3306/mailer_db" >> .env
+          echo "DATABASE_URL=mysql+pymysql://root:password@db:3306/mailer_db" >> .env
           echo "MYSQL_ROOT_PASSWORD=rootpass" >> .env
           echo "MYSQL_DATABASE=mailer_db" >> .env
           echo "SMTP_SERVER=smtp.gmail.com" >> .env
@@ -45,9 +45,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest requests dotenv
 
-      # 4. Spin up the Dockerized Infrastructure (Flask + MySQL)
-      - name: Start Docker Infrastructure
-        run: docker compose up -d
+      # 4. Spin up the Database and wait for it to initialize
+      - name: Boot Database
+        run: docker compose up -d db
+
+      # 4.5 Prevent the Race Condition
+      - name: Wait for MySQL Initialization
+        run: |
+          echo "Giving MySQL 15 seconds to allocate the ephemeral database..."
+          sleep 15
+
+      # 4.6 Spin up the Application
+      - name: Boot Flask Application
+        run: docker compose up -d app
 
       # 5. Wait for Backend Health (Robust Polling)
       - name: Wait for Backend Health
