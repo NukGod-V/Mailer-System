@@ -115,21 +115,20 @@ def send_email():
             
         recipient_count = len(to)
         if not scheduled_at:
-            # Send immediately
-            logger.info(f"Sending email: from_role={from_role}, to={recipient_count} recipient(s), subject='{subject}'")
+            # Send immediately (BACKGROUND HANDOFF)
+            logger.info(f"Handing off {recipient_count} emails to Celery Redis Queue")
 
-            success, failed_list = send_bulk_emails(from_role, to, subject, body, content_type, attachments,template_name)
+            from tasks import dispatch_emails_background
+            
+            # .delay() is the magic Celery command that writes it to Redis instead of running it locally
+            dispatch_emails_background.delay(
+                from_role, to, subject, body, content_type, attachments, template_name
+            )
 
-            if success:
-                logger.info(f"All {recipient_count} emails sent successfully")
-                return jsonify({"message": "Emails sent successfully."}), 200
-            else:
-                failed_count = len(failed_list)
-                logger.warning(f"{failed_count} out of {recipient_count} emails failed to send")
-                return jsonify({
-                    "message": "Some emails failed to send.",
-                    "failed_recipients": failed_list
-                }), 400
+            # Instantly return a 202 Accepted. Your API is now lightning fast!
+            return jsonify({
+                "message": "Emails successfully queued for background processing."
+            }), 202
         else:
             # Schedule email for later
             from models import db

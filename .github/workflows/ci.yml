@@ -33,6 +33,7 @@ jobs:
           echo "FLASK_ENV=testing" >> .env
           echo "SECRET_KEY=veryTopSecrestKey" >> .env
           echo "DATABASE_URL=mysql+pymysql://root:rootpass@db:3306/mailer_db" >> .env
+          echo "REDIS_URL=redis://redis:6379/0" >> .env
           echo "MYSQL_ROOT_PASSWORD=rootpass" >> .env
           echo "MYSQL_DATABASE=mailer_db" >> .env
           echo "SMTP_SERVER=smtp.gmail.com" >> .env

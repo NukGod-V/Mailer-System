@@ -27,5 +27,24 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 5s
       retries: 10
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build: .  # Assuming your Flask app builds from the current directory
+    # We run the exact same code, but override the boot command to start Celery instead of Flask
+    command: celery -A app.celery worker --loglevel=info 
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - db
 volumes:
   mysql_data:
