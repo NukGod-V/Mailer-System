@@ -46,9 +46,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest requests dotenv
 
-      # 4. Spin up the Database and wait for it to initialize
-      - name: Boot Database
-        run: docker compose up -d db
+      # 4. Spin up Backend Infrastructure (Database + Message Broker)
+      - name: Boot Infrastructure
+        run: docker compose up -d db redis
 
       # 4.5 Prevent the Race Condition
       - name: Wait for MySQL Initialization
@@ -56,9 +56,9 @@ jobs:
           echo "Giving MySQL 15 seconds to allocate the ephemeral database..."
           sleep 15
 
-      # 4.6 Spin up the Application
-      - name: Boot Flask Application
-        run: docker compose up -d app
+      # 4.6 Spin up the Application and Background Worker
+      - name: Boot Flask and Celery
+        run: docker compose up -d app worker
 
       # 5. Wait for Backend Health (Robust Polling)
       - name: Wait for Backend Health
