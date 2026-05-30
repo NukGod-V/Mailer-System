@@ -1,0 +1,101 @@
+name: Enterprise Mailer CI/CD
+
+# Trigger this workflow on every push or pull request to the main branch
+on:
+  push:
+    branches: [ main, v2.0 ]
+  pull_request:
+    branches: [ main, v2.0 ]
+
+jobs:
+  e2e-integration-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Pull the code onto the GitHub Ubuntu VM
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Install Python
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip" # Speeds up future runs by caching dependencies
+      
+      # 3.5 Generate Ephemeral .env file for CI and Setup Directories
+      - name: Create .env file and Setup
+        run: |
+          mkdir -p logs
+          touch logs/mailer.log
+          chmod 777 logs/mailer.log
+          touch .env
+          echo "FLASK_ENV=testing" >> .env
+          echo "SECRET_KEY=veryTopSecrestKey" >> .env
+          echo "DATABASE_URL=mysql+pymysql://root:rootpass@db:3306/mailer_db" >> .env
+          echo "REDIS_URL=redis://redis:6379/0" >> .env
+          echo "MYSQL_ROOT_PASSWORD=rootpass" >> .env
+          echo "MYSQL_DATABASE=mailer_db" >> .env
+          echo "SMTP_SERVER=smtp.gmail.com" >> .env
+          echo "SMTP_PORT=587" >> .env
+          echo "TRACKING_BASE_URL=http://localhost:5000" >> .env
+
+      # 3. Install Python Dependencies
+      - name: Install Requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest requests dotenv
+
+      # 4. Spin up the Database and wait for it to initialize
+      - name: Boot Database
+        run: docker compose up -d db
+
+      # 4.5 Prevent the Race Condition
+      - name: Wait for MySQL Initialization
+        run: |
+          echo "Giving MySQL 15 seconds to allocate the ephemeral database..."
+          sleep 15
+
+      # 4.6 Spin up the Application
+      - name: Boot Flask Application
+        run: docker compose up -d app
+
+      # 5. Wait for Backend Health (Robust Polling)
+      - name: Wait for Backend Health
+        run: |
+          echo "Polling Flask API..."
+          # Loop 10 times, pausing 3 seconds each time (30 seconds total)
+          for i in {1..10}; do
+            if curl -s -f http://localhost:5000/ > /dev/null; then
+              echo "✅ Flask is up and accepting traffic!"
+              exit 0
+            fi
+            echo "Waiting for Flask... ($i/10)"
+            sleep 3
+          done
+          echo "❌ Flask failed to boot. Proceeding to log dump."
+          exit 1 # This forces the pipeline to turn RED immediately
+
+      # 5.5. The Autopsy: Dump Logs if Health Check Fails
+      - name: Dump Docker Logs
+        if: failure() # This ensures this step ONLY runs if a previous step failed
+        run: |
+          echo "========== DOCKER COMPOSE LOGS =========="
+          docker compose logs
+          echo "========== DOCKER PS STATUS =========="
+          docker ps -a
+
+      # 6. Seed the Ephemeral CI/CD Database INSIDE the Docker Network
+      - name: Inject Database Seed Data
+        run: |
+          docker compose exec -T \
+            -e CI_SMTP_EMAIL="${{ secrets.CI_SMTP_EMAIL }}" \
+            -e CI_SMTP_PASSWORD="${{ secrets.CI_SMTP_PASSWORD }}" \
+            app python scripts/seed_ci_db.py
+
+      # 7. Execute the Programmatic End-to-End Test
+      - name: Run E2E Test Suite
+        env:
+          TESTMAIL_API_KEY: ${{ secrets.TESTMAIL_API_KEY }}
+          TESTMAIL_NAMESPACE: ${{ secrets.TESTMAIL_NAMESPACE }}
+        run: pytest tests/test_e2e_delivery.py -v -s
