@@ -1,8 +1,8 @@
 # app.py
-from flask import Flask
-from flask_cors import CORS
+from flask import Flask, request, jsonify
 from celery import Celery
-from models import db
+from flask_cors import CORS
+from models import db, User, GmailAccount, EmailLog, EmailStatus
 from routes.email import email_bp
 from routes.tracking import track_bp
 from dotenv import load_dotenv
@@ -30,7 +30,6 @@ def make_celery(app):
 
 app = Flask(__name__)
 CORS(app)
-
 # Configure database
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -53,6 +52,40 @@ def home():
 # Register blueprint routes
 app.register_blueprint(email_bp)
 app.register_blueprint(track_bp)
+
+#fetch from the database
+@app.route('/api/emails', methods=['GET'])
+def get_emails():
+    # Fetch the 50 most recent emails
+    logs = EmailLog.query.order_by(EmailLog.sent_at.desc()).limit(50).all()
+    
+    log_data = []
+    for log in logs:
+        # Check if there is tracking data in the EmailStatus table
+        status_record = log.statuses[0] if log.statuses else None
+        
+        # Determine what to show on the UI
+        display_status = "Sent"
+        opened_time = None
+        
+        if status_record:
+            if status_record.opened:
+                display_status = "Opened"
+                opened_time = status_record.opened_at.strftime("%b %d, %I:%M %p") if status_record.opened_at else None
+            elif status_record.sent:
+                display_status = "Delivered"
+
+        log_data.append({
+            "id": f"e{log.log_id:03d}",
+            "to": log.to_email,
+            "subject": log.subject,
+            "status": display_status,
+            "sentAt": log.sent_at.strftime("%b %d, %I:%M %p") if log.sent_at else "Unknown",
+            "openedAt": opened_time,
+            "role": "admin"
+        })
+        
+    return jsonify(log_data), 200
 
 if __name__ == '__main__':
     logger.info("Starting mailer application")
