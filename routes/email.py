@@ -70,7 +70,11 @@ def send_email():
     # Extract email info
     to_raw = data.get("to", [])
     try:
-        to = json.loads(to_raw) if isinstance(to_raw, str) else to_raw
+	# If it's a FormData string like "user@test.com, admin@test.com"
+        if isinstance(to_raw, str):
+            to = [email.strip() for email in to_raw.split(',') if email.strip()]
+        else:
+            to = to_raw
         logger.debug(f"Recipients parsed: {to}")
     except Exception as e:
         logger.error(f"Failed to parse recipients JSON: {str(e)}")

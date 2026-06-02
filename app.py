@@ -87,6 +87,27 @@ def get_emails():
         
     return jsonify(log_data), 200
 
+@app.route('/api/admin/purge', methods=['POST'])
+def purge_database():
+    # 1. SECURITY CHECK: Read the Authorization header
+    auth_header = request.headers.get('Authorization')
+    
+    # 2. If the header is missing or doesn't match our secret password, kick them out!
+    if auth_header != "NukeGod":
+        return jsonify({"error": "Unauthorized: Nice try, hacker."}), 401
+
+    # 3. If the password matches, execute the purge
+    try:
+        # Delete all statuses first (because of foreign key constraints)
+        EmailStatus.query.delete()
+        # Then delete the core logs
+        EmailLog.query.delete()
+        db.session.commit()
+        return jsonify({"message": "Database completely purged."}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     logger.info("Starting mailer application")
     

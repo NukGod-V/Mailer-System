@@ -7,6 +7,7 @@ services:
       - "5000:5000"
     volumes:
       - .:/app
+      - ./attachments:/app/attachments
     env_file:
       - .env
     depends_on:
@@ -43,6 +44,8 @@ services:
     command: celery -A app.celery worker --loglevel=info 
     env_file:
       - .env
+    volumes:
+      - ./attachments:/app/attachments
     depends_on:
       - redis
       - db
