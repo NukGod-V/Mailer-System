@@ -1,0 +1,48 @@
+name: Production CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Flask App Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile  # Assuming your Flask app Dockerfile is here
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/mailer-app:latest
+
+  deploy-to-ec2:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into AWS and Execute Hot-Swap
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/Mailer-System
+            
+            # Pull down the fresh images built by GitHub
+            sudo docker compose pull
+            
+            # Gracefully update the running system without breaking the DB
+            sudo docker compose up -d --force-recreate --no-deps app worker
+            
+            # Clean up old, unused image fragments to save SSD storage space
+            sudo docker image prune -f
