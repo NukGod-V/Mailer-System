@@ -10,7 +10,7 @@ class User(db.Model):
     service_name = db.Column(db.String(100), nullable=False)
     api_token = db.Column(db.String(255), unique=True, nullable=False)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class GmailAccount(db.Model):
@@ -43,7 +43,7 @@ class EmailLog(db.Model):
     to_email = db.Column(db.String(255), nullable=False)
     subject = db.Column(db.String(255), nullable=False)
     body = db.Column(db.Text, nullable=False)
-    sent_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    sent_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     status = db.Column(db.String(50), nullable=False)
     error_message = db.Column(db.Text, nullable=True)
 

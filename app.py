@@ -8,6 +8,9 @@ from routes.tracking import track_bp
 from dotenv import load_dotenv
 from scheduler import start_scheduler
 from utils.logger import logger
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
+from sentry_sdk.integrations.celery import CeleryIntegration
 import os
 
 load_dotenv()
@@ -27,6 +30,18 @@ def make_celery(app):
                 
     celery.Task = ContextTask
     return celery
+
+sentry_sdk.init(
+    dsn=os.environ.get("SENTRY_DSN"),
+    integrations=[
+        FlaskIntegration(),
+        CeleryIntegration()
+    ],
+    # Set traces_sample_rate to 1.0 to capture 100% of transactions for performance monitoring.
+    traces_sample_rate=1.0,
+    # Set to 'production' so your dashboard organizes errors properly
+    environment="production" 
+)
 
 app = Flask(__name__)
 CORS(app)
@@ -107,6 +122,12 @@ def purge_database():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/debug-sentry')
+def trigger_error():
+    # This will intentionally crash Python by dividing by zero
+    division_by_zero = 1 / 0
+    return "This will never render"
 
 if __name__ == '__main__':
     logger.info("Starting mailer application")
