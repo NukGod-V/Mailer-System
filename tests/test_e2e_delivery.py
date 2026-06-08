@@ -2,6 +2,7 @@ import os
 import time
 import requests
 import uuid
+import re
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -39,10 +40,9 @@ def test_end_to_end_delivery():
     namespace = os.getenv("TESTMAIL_NAMESPACE")
     recipient = f"{namespace}.{test_tag}@inbox.testmail.app"
     
-    # 2. Fire the payload (Patched URL)
+    # 2. Fire the payload
     api_url = "http://localhost:5000/api/send_email" 
     
-    # Patched Payload (Added Auth + List formatting for 'to')
     payload = {
         "from_role": "admin",
         "token": "pipeline-test-token-123", # Use the CI seeded token
@@ -50,12 +50,9 @@ def test_end_to_end_delivery():
         "subject": "E2E Automated Pipeline Test",
         "body": "<p>If you can read this, the pipeline is intact.</p>"
     }
-
-    # Patched Payload (Added Auth + List formatting for 'to')
     
+    print("\n🚀 Firing email through Flask API...")
     response = requests.post(api_url, json=payload)
-    
-    # Enhanced assertion to print exact Flask validation errors if it fails
     assert response.status_code in [200, 202], f"API failed with {response.status_code}: {response.text}"
     
     # 3. Wait for it to hit the Testmail server
@@ -63,4 +60,34 @@ def test_end_to_end_delivery():
     
     # 4. Assert the payload integrity
     assert delivered_email['subject'] == "E2E Automated Pipeline Test"
-    assert "<p>If you can read this, the pipeline is intact.</p>" in delivered_email['html']
+    
+    html_content = delivered_email['html']
+    assert "<p>If you can read this, the pipeline is intact.</p>" in html_content
+    
+    # ---------------------------------------------------------
+    # NEW: PHASE 5 - PIXEL INGESTION SIMULATION
+    # ---------------------------------------------------------
+    
+    print("\n🔍 Scanning HTML for tracking pixel...")
+    
+    # Regex to find the dynamically generated image source URL
+    # It looks for src=".../api/track/ANYTHING.png"
+    pixel_match = re.search(r'src=["\'](.*?/api/track/[^"\']+\.png)["\']', html_content)
+    
+    assert pixel_match is not None, "❌ Tracking pixel was NOT injected into the email HTML!"
+    
+    pixel_url = pixel_match.group(1)
+    print(f"🔗 Extracted Pixel URL: {pixel_url}")
+    
+    # 6. Simulate a user opening the email
+    print("👁️ Simulating user 'Open' event by hitting the pixel...")
+    pixel_response = requests.get(pixel_url)
+    
+    # 7. Assert the pixel endpoint worked perfectly
+    assert pixel_response.status_code == 200, f"❌ Pixel hit failed! Expected 200 OK but got {pixel_response.status_code}"
+    
+    # Ensure the Flask app actually returned an invisible image, not a JSON error
+    content_type = pixel_response.headers.get("Content-Type", "")
+    assert "image" in content_type, f"❌ Pixel endpoint returned non-image Content-Type: {content_type}"
+    
+    print("✅ Pixel ingestion test passed! The open event was successfully processed by the server.")
