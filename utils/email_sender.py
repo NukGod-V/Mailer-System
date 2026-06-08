@@ -97,7 +97,7 @@ def generate_tracking_pixel(tracking_id, base_url=None):
         # You can set this via environment variable or config
         base_url = os.getenv('TRACKING_BASE_URL')
     
-    tracking_url = f"{base_url}/track/{tracking_id}.png"
+    tracking_url = f"{base_url}/api/track/{tracking_id}.png"
     return f'<img src="{tracking_url}" width="1" height="1" style="display:none;" alt=""/>'
 
 
