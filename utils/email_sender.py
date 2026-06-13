@@ -396,10 +396,19 @@ def send_bulk_emails(from_role, to_list, subject, body, content_type="text/html"
     
     if failed_emails:
         failure_count = len(failed_emails)
-        logger.warning(f"Bulk email job completed in {elapsed_time:.2f}s: {failure_count} of {len(recipients)} emails failed")
-        logger.debug(f"Failed emails: {', '.join(failed_emails[:5])}" + 
-                    (f"... and {len(failed_emails)-5} more" if len(failed_emails) > 5 else ""))
+        total_count = len(recipients)
+        
+        # 1. Total Failure Condition
+        if failure_count == total_count:
+            logger.error(f"CRITICAL: All {total_count} emails failed. First target: {failed_emails[0]}")
+            # THIS is what Sentry, Celery, and Datadog are listening for.
+            raise ValueError(f"Bulk dispatch completely failed. Missing body or invalid configuration.")
+            
+        # 2. Partial Failure Condition
+        logger.warning(f"Partial failure: {failure_count} of {total_count} emails failed to send.")
+        logger.debug(f"Failed emails: {', '.join(failed_emails[:5])}...")
         return False, failed_emails
+        
     else:
         logger.info(f"Bulk email job completed successfully in {elapsed_time:.2f}s. All {len(recipients)} emails sent")
         return True, []

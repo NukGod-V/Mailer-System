@@ -5,6 +5,7 @@ services:
     build: .
     ports:
       - "5000:5000"
+    command: ddtrace-run gunicorn -w 4 -b 0.0.0.0:5000 app:app
     volumes:
       - .:/app
       - ./attachments:/app/attachments
@@ -41,7 +42,7 @@ services:
   worker:
     build: .  # Assuming your Flask app builds from the current directory
     # We run the exact same code, but override the boot command to start Celery instead of Flask
-    command: celery -A app.celery worker --loglevel=info 
+    command: ddtrace-run celery -A app.celery worker --loglevel=info 
     env_file:
       - .env
     volumes:
@@ -49,5 +50,20 @@ services:
     depends_on:
       - redis
       - db
+  datadog:
+    image: gcr.io/datadoghq/agent:latest
+    pid: host
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=us5.datadoghq.com
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      - DD_CONTAINER_EXCLUDE="name:datadog" # Prevents the agent from monitoring itself in an infinite loop
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
 volumes:
   mysql_data:
